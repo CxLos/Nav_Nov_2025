@@ -19,13 +19,13 @@ import folium
 from folium.plugins import MousePosition
 
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 
 # Google Web Credentials
 import json
 import base64
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 # 'data/~$bmhc_data_2024_cleaned.xlsx'
 # print('System Version:', sys.version)
@@ -42,19 +42,20 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 # Define the Google Sheets URL
 sheet_url = "https://docs.google.com/spreadsheets/d/1Vi5VQWt9AD8nKbO78FpQdm6TrfRmg0o7az77Hku2i7Y/edit#gid=78776635"
 
-# Define the scope
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+scope = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
 
-# Load credentials
 encoded_key = os.getenv("GOOGLE_CREDENTIALS")
 
 if encoded_key:
     json_key = json.loads(base64.b64decode(encoded_key).decode("utf-8"))
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(json_key, scope)
+    creds = Credentials.from_service_account_info(json_key, scopes=scope)
 else:
     creds_path = r"C:\Users\CxLos\OneDrive\Documents\BMHC\Data\bmhc-timesheet-4808d1347240.json"
     if os.path.exists(creds_path):
-        creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+        creds = Credentials.from_service_account_file(creds_path, scopes=scope)
     else:
         raise FileNotFoundError("Service account JSON file not found and GOOGLE_CREDENTIALS is not set.")
 
@@ -63,18 +64,20 @@ client = gspread.authorize(creds)
 sheet = client.open_by_url(sheet_url)
 data = pd.DataFrame(client.open_by_url(sheet_url).sheet1.get_all_records())
 df = data.copy()
-
 # Trim leading and trailing whitespaces from column names
 df.columns = df.columns.str.strip()
 
-# Filtered df where 'Date of Activity:' is in May
+# Get the reporting month:
+current_month = datetime(2025, 11, 1).strftime("%B")
+report_year = datetime(2025, 11, 1).year
+int_month = 11
+
+# Filtered df where 'Date of Activity:' is in October
 df["Date of Activity"] = pd.to_datetime(df["Date of Activity"], errors='coerce')
 # df["Date of Activity"] = df["Date of Activity"].dt.tz_localize('UTC')  # or local timezone first, then convert to UTC
-df = df[df['Date of Activity'].dt.month == 7]
-
-# Get the reporting month:
-current_month = datetime(2025, 7, 1).strftime("%B")
-report_year = datetime(2025, 7, 1).year
+df = df[(df['Date of Activity'].dt.month == int_month) & (df['Date of Activity'].dt.year == report_year)]
+# Sort df from oldest to newest
+df = df.sort_values(by='Date of Activity', ascending=True)
 
 # Strip whitespace
 df.columns = df.columns.str.strip()
@@ -89,7 +92,7 @@ for col in df.select_dtypes(include='object').columns:
 # color_sequence = px.colors.qualitative.Plotly
 
 # -----------------------------------------------
-# print(df.head())
+# print(df.head(15))
 # print('Total entries: ', len(df))
 # print('Column Names: \n', df.columns.tolist())
 # print('Column Names: \n', df1.columns)
@@ -147,6 +150,7 @@ df.rename(
         "Type of support given:" : "Support",
         "Gender:" : "Gender",
         "Race/Ethnicity:" : "Ethnicity",
+        "Provide brief support description:" : "Description",
         # "" : "",
     }, 
 inplace=True)
@@ -156,7 +160,7 @@ inplace=True)
 # # Clients Serviced:
 clients_served = len(df)
 clients_served = str(clients_served)
-# # print('Patients Served This Month:', patients_served)
+# print('Patients Served This Month:', clients_served)
 
 # ------------------------------ Navigation Hours ---------------------------- #
 
@@ -222,36 +226,36 @@ race_bar=px.bar(
     color='Ethnicity',
     text='Count',
 ).update_layout(
-    height=700, 
-    width=1000,
+    # height=700, 
+    # width=1000,
     title=dict(
         text='Race Distribution Bar Chart',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=-20,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         showticklabels=False,  # Hide x-tick labels
         title=dict(
             # text=None,
             text="Race/ Ethnicity",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -278,17 +282,24 @@ race_pie=px.pie(
     names='Ethnicity',
     values='Count'
 ).update_layout(
-    height=700, 
-    title='Race Distribution Pie Chart',
-    title_x=0.5,
+    # height=700, 
+    title=dict(
+        text='Race Distribution Ratio',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label}</b>: %{value}<extra></extra>'
 )
 
@@ -329,35 +340,35 @@ gender_bar=px.bar(
     color='Gender',
     text='Count',
 ).update_layout(
-    height=700, 
-    width=1000,
+    # height=700, 
+    # width=1000,
     title=dict(
         text='Sex Distribution Bar Chart',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Gender",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -383,17 +394,24 @@ gender_pie=px.pie(
     df,
     names='Gender'
 ).update_layout(
-    height=700,
-    title='Patient Visits by Sex',
-    title_x=0.5,
+    # height=700,
+    title=dict(
+        text='Ratio of Patient Visits by Sex',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label} Visits</b>: %{value}<extra></extra>'
 )
 
@@ -478,35 +496,35 @@ age_bar=px.bar(
     color='Age_Group',
     text='Patient_Visits',
 ).update_layout(
-    height=700, 
-    width=1000,
+    # height=700, 
+    # width=1000,
     title=dict(
         text='Client Age Distribution',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Age Group",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     yaxis=dict(
         title=dict(
             text='Number of Visits',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -534,17 +552,23 @@ age_pie = px.pie(
     names='Age_Group',
     values='Patient_Visits',
 ).update_layout(
-    height=700, 
-    title='Client Age Distribution',
-    title_x=0.5,
+    title=dict(
+        text='Ratio of Client Age Distribution',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     rotation=190,
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label}</b>: %{value}<extra></extra>'
 )
 
@@ -595,37 +619,37 @@ insurance_bar=px.bar(
     color="Insurance",
     text='Count',
 ).update_layout(
-    height=700, 
-    width=1000,
+    # height=700, 
+    # width=1000,
     title=dict(
         text='Insurance Status Bar Chart',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=-20, 
-        tickfont=dict(size=18),  
+        tickfont=dict(size=16),  
         showticklabels=False,  
         # showticklabels=True,  
         title=dict(
             # text=None,
             text="Insurance",
-            font=dict(size=20),  
+            font=dict(size=16),  
         ),
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  
+            font=dict(size=16),  
         ),
     ),
     legend=dict(
@@ -652,18 +676,25 @@ insurance_pie=px.pie(
     names="Insurance",
     values='Count'
 ).update_layout(
-    height=700, 
-    title='Insurance Status Pie Chart',
-    title_x=0.5,
+    # height=700, 
+    title=dict(
+        text='Insurance Status Ratio',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
-    rotation=150,
+    rotation=100,
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label}</b>: %{value}<extra></extra>'
 )
 
@@ -762,29 +793,29 @@ location_bar=px.bar(
     color="Location",
     text='Count',
 ).update_layout(
-    height=900, 
-    width=2000,
+    # height=900, 
+    # width=2000,
     title=dict(
         text='Location Encountered Bar Chart',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=-20,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Location",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
         # showticklabels=True 
         showticklabels=False  # Hide x-tick labels
@@ -792,11 +823,11 @@ location_bar=px.bar(
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
-        title='Location',
+        title='',
         orientation="v",  # Vertical legend
         x=1.05,  # Position legend to the right
         y=1,  # Position legend at the top
@@ -819,19 +850,26 @@ location_pie=px.pie(
     names="Location",
     values='Count'
 ).update_layout(
-    height=900,
-    width=1800,
-    title='Location Encountered Pie Chart',
-    title_x=0.5,
+    # height=900,
+    # width=1800,
+    title=dict(
+        text='Ratio of Locations Encountered',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     rotation=90,
     # textinfo='percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label}</b>: %{value}<extra></extra>'
 )
 
@@ -855,29 +893,24 @@ support_categories =[
     "Social Determinant of Health Referral"
 ]
 
-# Normalize support_categories (lowercase and stripped for consistency)
-# The code is creating a dictionary `normalized_categories` where the keys are the lowercase versions of the categories in the `support_categories` list, stripped of any leading or trailing whitespace, and the values are the original categories. This allows for easy lookup of categories in a case-insensitive manner.
-normalized_categories = {cat.lower().strip(): cat for cat in support_categories}
-
-# Counter to count matches
+# Counter to count all support types mentioned
 counter = Counter()
 
+# Around line 897, modify the splitting logic:
+
 for entry in df['Support']:
-    
-    # Split and clean each category
-    items = [i.strip().lower() for i in entry.split(",")]
+    # Split by both comma and 'and', then clean each item
+    # First replace ' and ' with ', ' to standardize, then split by comma
+    standardized_entry = str(entry).replace(' and ', ', ')
+    items = [i.strip() for i in standardized_entry.split(",") if i.strip()]
     for item in items:
-        if item in normalized_categories:
-            counter[normalized_categories[item]] += 1
+        if item:  # Only count non-empty items
+            counter[item] += 1
 
-# Display the result
-# for category, count in counter.items():
-#     print(f"Support Counts: \n {category}: {count}")
-
-# # 'How can BMHC support you today?'
-# df_support = df['Support'].value_counts().reset_index(name='Count')
-
+# Create DataFrame from counter
 df_support = pd.DataFrame(counter.items(), columns=['Support', 'Count']).sort_values(by='Count', ascending=False)
+
+# print("Support Value counts After Split: \n", df_support)
 
 support_bar=px.bar(
     df_support,
@@ -886,36 +919,36 @@ support_bar=px.bar(
     color='Support',
     text='Count',
 ).update_layout(
-    height=700, 
-    width=1000,
+    # height=700, 
+    # width=1000,
     title=dict(
         text='Support Provided Distribution',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Type of Support",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
         showticklabels=False  # Hide x-tick labels
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -942,18 +975,24 @@ support_pie = px.pie(
     names='Support',
     values='Count',
 ).update_layout(
-    title='Support Distribution Pie Chart',
-    height=700, 
-    title_x=0.5,
+    title=dict(
+        text='Ratio of Support Distribution',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
-    rotation=110,
+    rotation=20,
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label}</b>: %{value}<extra></extra>'
 )
 
@@ -970,36 +1009,36 @@ status_bar=px.bar(
     color='Status',
     text='Count',
 ).update_layout(
-    height=700, 
-    width=900,
+    # height=700, 
+    # width=900,
     title=dict(
         text='New vs. Returning Clients',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Status",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
         showticklabels=True  # Hide x-tick labels
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -1027,18 +1066,24 @@ status_pie=px.pie(
     names="Status",
     values='Count'  # Specify the values parameter
 ).update_layout(
-    height=700, 
-    title='New vs. Returning',
-    title_x=0.5,
+    title=dict(
+        text='Ratio of New vs. Returning',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     rotation=-90,
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label} Status</b>: %{value}<extra></extra>',
 )
 
@@ -1103,36 +1148,36 @@ person_bar=px.bar(
     color='Person',
     text='Count',
 ).update_layout(
-    height=700, 
-    width=900,
+    # height=700, 
+    # width=900,
     title=dict(
         text='People Submitting Forms',
         x=0.5, 
         font=dict(
-            size=25,
+            size=21,
             family='Calibri',
             color='black',
             )
     ),
     font=dict(
         family='Calibri',
-        size=18,
+        size=16,
         color='black'
     ),
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
-        tickfont=dict(size=18),  # Adjust font size for the tick labels
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
         title=dict(
             # text=None,
             text="Name",
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
         showticklabels=False  # Hide x-tick labels
     ),
     yaxis=dict(
         title=dict(
             text='Count',
-            font=dict(size=20),  # Font size for the title
+            font=dict(size=16),  # Font size for the title
         ),
     ),
     legend=dict(
@@ -1160,18 +1205,24 @@ person_pie=px.pie(
     names="Person",
     values='Count'  # Specify the values parameter
 ).update_layout(
-    height=700, 
-    title='Ratio of People Submitting Forms',
-    title_x=0.5,
+    title=dict(
+        text='Ratio of Patient Visits by Sex',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     )
 ).update_traces(
     rotation=140,
     # textinfo='value+percent',
-    texttemplate='%{value}<br>(%{percent:.2%})',
+    texttemplate='%{value}<br>(%{percent:.1%})',
     hovertemplate='<b>%{label} Status</b>: %{value}<extra></extra>',
 )
 
@@ -1248,8 +1299,8 @@ zip_fig =px.bar(
     xaxis_title='Residents',
     yaxis_title='Zip Code',
     title_x=0.5,
-    height=950,
-    width=1500,
+    # height=950,
+    # width=1500,
     font=dict(
         family='Calibri',
         size=17,
@@ -1278,20 +1329,28 @@ zip_pie = px.pie(
     df_z,
     names='ZIP2',
     values='Count',
-    title='Client Distribution by ZIP Code',
     color_discrete_sequence=px.colors.qualitative.Safe
 ).update_layout(
-    title_x=0.5,
-    height=700,
-    width=900,
+    # height=700,
+    # width=900,
+    title=dict(
+        text='Ratio of ZIP Code Distribution',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+        )
+    ),
     font=dict(
         family='Calibri',
-        size=17,
+        size=16,
         color='black'
     ),
     legend_title='ZIP Code'
 ).update_traces(
-    textinfo='percent+label',
+    rotation=90,
+    texttemplate='%{value}<br>(%{percent:.1%})',
     textfont_size=16,
     hovertemplate='<b>ZIP Code</b>: %{label}<br><b>Count</b>: %{value}<br><b>Percent</b>: %{percent}<extra></extra>'
 )
@@ -1500,35 +1559,202 @@ zip_pie = px.pie(
 # m.save(map_file)
 # map_html = open(map_file, 'r').read()
 
-# # # ========================== DataFrame Table ========================== #
+# ========================== DataFrame Table ========================== #
 
-# df_table = go.Figure(data=[go.Table(
-#     # columnwidth=[50, 50, 50],  # Adjust the width of the columns
-#     header=dict(
-#         values=list(df.columns),
-#         fill_color='paleturquoise',
-#         align='center',
-#         height=30,  # Adjust the height of the header cells
-#         # line=dict(color='black', width=1),  # Add border to header cells
-#         font=dict(size=12)  # Adjust font size
-#     ),
-#     cells=dict(
-#         values=[df[col] for col in df.columns],
-#         fill_color='lavender',
-#         align='left',
-#         height=25,  # Adjust the height of the cells
-#         # line=dict(color='black', width=1),  # Add border to cells
-#         font=dict(size=12)  # Adjust font size
-#     )
-# )])
+df = df.sort_values('Date of Activity', ascending=True)
 
-# df_table.update_layout(
-#     margin=dict(l=50, r=50, t=30, b=40),  # Remove margins
-#     height=400,
-#     # width=1500,  # Set a smaller width to make columns thinner
-#     paper_bgcolor='rgba(0,0,0,0)',  # Transparent background
-#     plot_bgcolor='rgba(0,0,0,0)'  # Transparent plot area
-# )
+# create a display index column and prepare table data/columns
+# reset index to ensure contiguous numbering after any filtering/sorting upstream
+df_indexed = df.reset_index(drop=True).copy()
+# Insert '#' as the first column (1-based row numbers)
+df_indexed.insert(0, '#', df_indexed.index + 1)
+
+# Convert to records for DataTable
+data = df_indexed.to_dict('records')
+columns = [{"name": col, "id": col} for col in df_indexed.columns]
+
+# -------------------------------------------------- #
+
+# print("Locations: \n", df['Location'].unique().tolist())
+
+def create_location_dataframes_with_support_tables(df, location_list):
+    """
+    Creates filtered dataframes for each location and support type tables with split logic
+    
+    Parameters:
+    df: Main dataframe
+    location_list: List of location names to filter by
+    
+    Returns:
+    Dictionary with location dataframes, support tables, and all necessary variables for Dash
+    """
+    location_data = {}
+    location_dataframes = {}  # Store DataFrames separately
+    
+    for location in location_list:
+        # Create safe variable name
+        safe_name = location.lower().replace(" ", "_").replace("'", "").replace("-", "_")
+        
+        # Filter dataframe for this location
+        df_location = df[df['Location'] == location]
+        
+        # Store DataFrame separately
+        location_dataframes[safe_name] = df_location
+        
+        # Create support counts with SPLIT logic (like your September file)
+        counter = Counter()
+        
+        for entry in df_location['Support']:
+            # Split by comma and clean each item
+            items = [i.strip() for i in str(entry).split(",") if i.strip()]
+            for item in items:
+                if item:  # Only count non-empty items
+                    counter[item] += 1
+        
+        # Create DataFrame from counter
+        df_support = pd.DataFrame(counter.items(), columns=['Type of Support', 'Count']).sort_values(by='Count', ascending=False)
+        
+        # Create indexed version for the table
+        df_support_indexed = df_support.reset_index(drop=True).copy()
+        df_support_indexed.insert(0, '#', df_support_indexed.index + 1)
+        data_support = df_support_indexed.to_dict('records')
+        columns_support = [{"name": col, "id": col} for col in df_support_indexed.columns]
+        
+        # Calculate sum of support counts instead of dataframe length
+        support_count_sum = df_support['Count'].sum() if not df_support.empty else 0
+        
+        # Store only JSON-serializable data
+        location_data[safe_name] = {
+            'length': support_count_sum,  # Now this is the sum of support counts
+            'original_name': location,
+            'data_support': data_support,
+            'columns_support': columns_support
+        }
+    
+    return location_data, location_dataframes
+
+# The rest of your code remains the same, but now:
+# bmhc_len = sum of all support counts for Black Men's Health Clinic
+# downtown_cc_len = sum of all support counts for Downtown Austin Community Court
+# etc.
+
+# This means your table titles will now show:
+# "Black Men's Health Clinic Support Types (45)" - where 45 is the total count of all support types provided
+# instead of showing the number of different support types or number of client visits
+
+# Updated usage:
+location_unique = [
+    "Black Men's Health Clinic",
+    'Downtown Austin Community Court', 
+    'South Bridge',
+    'Sunrise Navigation Homeless Center', 
+    'Phone Call', 
+    'Community First Village'
+]
+
+# Get both the JSON-serializable data and the DataFrames
+location_results, location_dfs = create_location_dataframes_with_support_tables(df, location_unique)
+
+# Extract individual dataframes from the separate dictionary
+df_bmhc = location_dfs['black_mens_health_clinic']
+df_downtown_cc = location_dfs['downtown_austin_community_court']
+df_south_bridge = location_dfs['south_bridge']
+df_sunrise = location_dfs['sunrise_navigation_homeless_center']
+df_phone_call = location_dfs['phone_call']
+df_community_first = location_dfs['community_first_village']
+
+# Extract lengths for table titles
+bmhc_len = location_results['black_mens_health_clinic']['length']
+downtown_cc_len = location_results['downtown_austin_community_court']['length']
+south_bridge_len = location_results['south_bridge']['length']
+sunrise_len = location_results['sunrise_navigation_homeless_center']['length']
+phone_call_len = location_results['phone_call']['length']
+community_first_len = location_results['community_first_village']['length']
+
+# Extract support table data for Dash tables
+data_bmhc_support = location_results['black_mens_health_clinic']['data_support']
+columns_bmhc_support = location_results['black_mens_health_clinic']['columns_support']
+
+data_downtown_cc_support = location_results['downtown_austin_community_court']['data_support']
+columns_downtown_cc_support = location_results['downtown_austin_community_court']['columns_support']
+
+data_south_bridge_support = location_results['south_bridge']['data_support']
+columns_south_bridge_support = location_results['south_bridge']['columns_support']
+
+data_sunrise_support = location_results['sunrise_navigation_homeless_center']['data_support']
+columns_sunrise_support = location_results['sunrise_navigation_homeless_center']['columns_support']
+
+data_phone_call_support = location_results['phone_call']['data_support']
+columns_phone_call_support = location_results['phone_call']['columns_support']
+
+data_community_first_support = location_results['community_first_village']['data_support']
+columns_community_first_support = location_results['community_first_village']['columns_support']
+
+# ------------------------------------------------ #
+
+# Create location support summary table that groups by location
+df_location_support = (
+    df.groupby('Location')
+    .agg({
+        'Support': ['count', lambda x: ', '.join(sorted(set(x)))]  # Count and unique support types
+    })
+    .reset_index()
+)
+
+# Flatten the multi-level column names
+df_location_support.columns = ['Location', 'Count', 'Support Types']
+
+# Sort by count in descending order
+df_location_support = df_location_support.sort_values(by='Count', ascending=False)
+
+# Create indexed version for the table
+df_location_support_indexed = df_location_support.reset_index(drop=True).copy()
+df_location_support_indexed.insert(0, '#', df_location_support_indexed.index + 1)
+data_location_support = df_location_support_indexed.to_dict('records')
+columns_location_support = [{"name": col, "id": col} for col in df_location_support_indexed.columns]
+
+# Print verification
+# for key, data in location_results.items():
+#     print(f"{data['original_name']}: {data['length']}")
+
+# # Print verification
+# for key, data in location_results.items():
+#     print(f"{data['original_name']}: {data['length']}")
+
+# Create location support summary table that groups by location
+df_location_support = (
+    df.groupby('Location')
+    .agg({
+        'Support': ['count', lambda x: ', '.join(sorted(set(x)))]  # Count and unique support types
+    })
+    .reset_index()
+)
+
+# Flatten the multi-level column names
+df_location_support.columns = ['Location', 'Count', 'Support Types']
+
+# Sort by count in descending order
+df_location_support = df_location_support.sort_values(by='Count', ascending=False)
+
+# Create indexed version for the table
+df_location_support_indexed = df_location_support.reset_index(drop=True).copy()
+df_location_support_indexed.insert(0, '#', df_location_support_indexed.index + 1)
+data_location_support = df_location_support_indexed.to_dict('records')
+columns_location_support = [{"name": col, "id": col} for col in df_location_support_indexed.columns]
+
+# ---------------------------------------------- #
+
+df_main = df.sort_values('Date of Activity', ascending=True)
+
+# create a display index column and prepare table data/columns
+# reset index to ensure contiguous numbering after any filtering/sorting upstream
+df_main_indexed = df_main.reset_index(drop=True).copy()
+# Insert '#' as the first column (1-based row numbers)
+df_main_indexed.insert(0, '#', df_main_indexed.index + 1)
+
+# Convert to records for DataTable
+data_main_navigation = df_main_indexed.to_dict('records')
+columns_main_navigation = [{"name": col, "id": col} for col in df_main_indexed.columns]
 
 # ============================== Dash Application ========================== #
 
@@ -1540,468 +1766,888 @@ app.layout = html.Div(
         html.Div(
             className='divv', 
             children=[ 
-            html.H1(
-                'Client Navigation Impact Report', 
-                className='title'),
-            html.H1(
-                f'{current_month} {report_year}', 
-                className='title2'),
-            html.Div(
-                className='btn-box', 
-                children=[
-                    html.A(
-                        'Repo',
-                        href=f'https://github.com/CxLos/Nav_Apr_{report_year}',
-                        className='btn'),
-                ]),
-    ]),  
-
-# # Data Table
-# html.Div(
-#     className='row0',
-#     children=[
-#         html.Div(
-#             className='table',
-#             children=[
-#                 html.H1(
-#                     className='table-title',
-#                     children='Data Table'
-#                 )
-#             ]
-#         ),
-#         html.Div(
-#             className='table2', 
-#             children=[
-#                 dcc.Graph(
-#                     className='data',
-#                     figure=df_table
-#                 )
-#             ]
-#         )
-#     ]
-# ),
-
-# # ROW 1
-html.Div(
-    className='row1',
-    children=[
-
-        html.Div(
-            className='graph11',
-            children=[
-                html.Div(
-                    className='high3',
-                    children=[f'{current_month} Clients Serviced:']
-                ),
-                html.Div(
-                    className='circle2',
-                    children=[
-                        html.Div(
-                            className='hilite',
-                            children=[
-                                html.H1(
-                                    className='high4',
-                                    children=[clients_served]
-                                ),
-                            ]
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        html.Div(
-            className='graph22',
-            children=[
-                html.Div(
-                    className='high1',
-                    children=[f'{current_month} Navigation Hours:']
-                ),
-                html.Div(
-                    className='circle1',
-                    children=[
-                        html.Div(
-                            className='hilite',
-                            children=[
-                                html.H1(
-                                    className='high2',
-                                    children=[df_duration]
-                                ),
-                            ]
-                        ),
-                    ],
-                ),
-            ],
-        ),
-    ]
-),
-
-# # ROW 1
-html.Div(
-    className='row1',
-    children=[
-
-        html.Div(
-            className='graph11',
-            children=[
-                html.Div(
-                    className='high3',
-                    children=[f'{current_month} Travel Hours']
-                ),
-                html.Div(
-                    className='circle2',
-                    children=[
-                        html.Div(
-                            className='hilite',
-                            children=[
-                                html.H1(
-                                    className='high5',
-                                    children=[travel_time]
-                                ),
-                            ]
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        html.Div(
-            className='graph22',
-            children=[
-                html.Div(
-                    className='high1',
-                    children=['Placeholder']
-                ),
-                html.Div(
-                    className='circle1',
-                    children=[
-                        html.Div(
-                            className='hilite',
-                            children=[
-                                html.H1(
-                                    className='high2',
-                                    children=[]
-                                ),
-                            ]
-                        ),
-                    ],
-                ),
-            ],
-        ),
-    ]
-),
-
-# # ROW 3
-html.Div(
-    className='row2',
-    children=[
-        html.Div(
-            className='graph3',
-            children=[
-                dcc.Graph(
-                    figure=race_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph4',
-            children=[
-                dcc.Graph(
-                    figure=race_pie
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 5
-html.Div(
-    className='row2',
-    children=[
-        html.Div(
-            className='graph3',
-            children=[
-                dcc.Graph(
-                    figure=gender_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph4',
-            children=[
-                #
-                dcc.Graph(
-                    figure=gender_pie
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 5
-html.Div(
-    className='row2',
-    children=[
-        html.Div(
-            className='graph3',
-            children=[
-                dcc.Graph(
-                    figure=age_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph4',
-            children=[
-                dcc.Graph(
-                    figure=age_pie
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 3
-html.Div(
-    className='row2',
-    children=[
-        html.Div(
-            className='graph3',
-            children=[
-                dcc.Graph(
-                    figure=insurance_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph4',
-            children=[
-  
-                dcc.Graph(
-                    figure=insurance_pie
-                )
-            ]
-        )
-    ]
-),
-
-html.Div(
-    className='row3',
-    children=[
-        html.Div(
-            className='graph33',
-            children=[
-                dcc.Graph(
-                    figure=location_bar
-                )
-            ]
-        ),
-    ]
-),   
-
-html.Div(
-    className='row3',
-    children=[
-        html.Div(
-            className='graph33',
-            children=[
-                dcc.Graph(
-                    figure=location_pie
-                )
-            ]
-        ),
-    ]
-),   
-
-# # ROW 5
-html.Div(
-    className='row2',
-    children=[
-        html.Div(
-            className='graph3',
-            children=[
-                dcc.Graph(
-                    figure=support_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph4',
-            children=[
-                #
-                dcc.Graph(
-                    figure=support_pie
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 6
-html.Div(
-    className='row1',
-    children=[
-        html.Div(
-            className='graph1',
-            children=[
-                dcc.Graph(
-                    figure=status_bar
-
-                )
-            ]
-        ),
-        html.Div(
-            className='graph2',
-            children=[
-                dcc.Graph(
-                    figure=status_pie
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 7
-html.Div(
-    className='row1',
-    children=[
-        html.Div(
-            className='graph1',
-            children=[
-                dcc.Graph(
-                    figure=person_bar
-                )
-            ]
-        ),
-        html.Div(
-            className='graph2',
-            children=[
-                # 
-                dcc.Graph(
-                    figure=person_pie
-                )
-            ]
-        )
-    ]
-),
-
-# ROW 9
-html.Div(
-    className='row4',
-    children=[
-        html.Div(
-            className='graph5',
-            children=[
-                dcc.Graph(
-                    figure=zip_fig
-                )
-            ]
-        )
-    ]
-),
-
-# # ROW 9
-# html.Div(
-#     className='row4',
-#     children=[
-#         html.Div(
-#             className='graph5',
-#             children=[
-#                 dcc.Graph(
-#                     figure=zip_pie
-#                 )
-#             ]
-#         )
-#     ]
-# ),
-
-# # ROW 8
-html.Div(
-    className='row3',
-    children=[
-        html.Div(
-            className='graph6',
-            children=[
                 html.H1(
-                    'Number of Visitors by Zip Code', 
-                    className='zip'
+                    'Client Navigation Report', 
+                    className='title'),
+                html.H1(
+                    f'{current_month} {report_year}', 
+                    className='title2'),
+                html.Div(
+                    className='btn-box', 
+                    children=[
+                        html.A(
+                            'Repo',
+                            href=f'https://github.com/CxLos/Nav_{current_month}_{report_year}',
+                            className='btn'
+                        ),
+                    ]
                 ),
-                html.Iframe(
-                    className='folium',
-                    id='folium-map',
-                    # srcDoc=map_html
-                )
             ]
-        )
+        ),  
+
+# ============================ Rollups ========================== #
+
+# ROW 1
+html.Div(
+    className='rollup-row',
+    children=[
+        
+        html.Div(
+            className='rollup-box-tl',
+            children=[
+                html.Div(
+                    className='title-box',
+                    children=[
+                        html.H3(
+                            className='rollup-title',
+                            children=[f'{current_month} Clients Served']
+                        ),
+                    ]
+                ),
+
+                html.Div(
+                    className='circle-box',
+                    children=[
+                        html.Div(
+                            className='circle-1',
+                            children=[
+                                html.H1(
+                                className='rollup-number',
+                                children=[clients_served]
+                                ),
+                            ]
+                        )
+                    ],
+                ),
+            ]
+        ),
+        html.Div(
+            className='rollup-box-tr',
+            children=[
+                html.Div(
+                    className='title-box',
+                    children=[
+                        html.H3(
+                            className='rollup-title',
+                            children=[f'{current_month} Navigation Hours']
+                        ),
+                    ]
+                ),
+                html.Div(
+                    className='circle-box',
+                    children=[
+                        html.Div(
+                            className='circle-2',
+                            children=[
+                                html.H1(
+                                className='rollup-number',
+                                children=[df_duration]
+                                ),
+                            ]
+                        )
+                    ],
+                ),
+            ]
+        ),
     ]
-)
+),
+
+html.Div(
+    className='rollup-row',
+    children=[
+        html.Div(
+            className='rollup-box-bl',
+            children=[
+                html.Div(
+                    className='title-box',
+                    children=[
+                        html.H3(
+                            className='rollup-title',
+                            children=[f'{current_month} Travel Hours']
+                        ),
+                    ]
+                ),
+
+                html.Div(
+                    className='circle-box',
+                    children=[
+                        html.Div(
+                            className='circle-3',
+                            children=[
+                                html.H1(
+                                className='rollup-number',
+                                children=[travel_time]
+                                ),
+                            ]
+                        )
+                    ],
+                ),
+            ]
+        ),
+        html.Div(
+            className='rollup-box-br',
+            children=[
+                html.Div(
+                    className='title-box',
+                    children=[
+                        html.H3(
+                            className='rollup-title',
+                            children=['Placeholder']
+                        ),
+                    ]
+                ),
+                html.Div(
+                    className='circle-box',
+                    children=[
+                        html.Div(
+                            className='circle-4',
+                            children=[
+                                html.H1(
+                                className='rollup-number',
+                                children=['-']
+                                ),
+                            ]
+                        )
+                    ],
+                ),
+            ]
+        ),
+    ]
+),
+
+# ============================ Visuals ========================== #
+
+html.Div(
+    className='graph-container',
+    children=[
+        
+        html.H1(
+            className='visuals-text',
+            children='Visuals'
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=race_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=race_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=gender_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=gender_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=age_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=age_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=insurance_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=insurance_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=location_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=location_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        # html.Div(
+        #     className='graph-row',
+        #     children=[
+        #         html.Div(
+        #             className='wide-box',
+        #             children=[
+        #                 dcc.Graph(
+        #                     className='wide-graph',
+        #                     figure=location_bar
+        #                 )
+        #             ]
+        #         ),
+        #     ]
+        # ),
+        
+        # html.Div(
+        #     className='graph-row',
+        #     children=[
+        #         html.Div(
+        #             className='wide-box',
+        #             children=[
+        #                 dcc.Graph(
+        #                     className='wide-graph',
+        #                     figure=location_pie
+        #                 )
+        #             ]
+        #         ),
+        #     ]
+        # ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=support_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=support_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=status_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=status_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=person_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=person_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='wide-box',
+                    children=[
+                        dcc.Graph(
+                            className='zip-graph',
+                            figure=zip_fig
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='wide-box',
+                    children=[
+                        dcc.Graph(
+                            className='zip-graph',
+                            figure=zip_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        html.Div(
+            className='folium-row',
+            children=[
+                html.Div(
+                    className='folium-box',
+                    children=[
+                        html.H1(
+                            'Visitors by Zip Code Map', 
+                            className='zip'
+                        ),
+                        html.Iframe(
+                            className='folium',
+                            id='folium-map',
+                            # srcDoc=map_html
+                        )
+                    ]
+                ),
+            ]
+        ),
+    ]
+),
+
+# ============================ Data Table ========================== #
+
+    html.Div(
+        className='data-row',
+        children=[
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children='Navigation Table'
+                    ),
+                    dash_table.DataTable(
+                        id='applications-table',
+                        data=data_main_navigation, 
+                        columns=columns_main_navigation, 
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                            # 'border': '3px solid #000',
+                            # 'borderRadius': '0px'
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            # make the index column narrow and centered
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Timestamp'},
+                            'width': '50px', 'minWidth': '100px', 'maxWidth': '200px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Date of Activity'},
+                            'width': '160px', 'minWidth': '160px', 'maxWidth': '160px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Description'},
+                            'width': '200px', 'minWidth': '400px', 'maxWidth': '200px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Black Men's Health Clinic Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"Black Men's Health Clinic Support Types ({bmhc_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='bmhc-support-table',
+                        data=data_bmhc_support,
+                        columns=columns_bmhc_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Downtown Austin Community Court Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"Downtown Austin Community Court Support Types ({downtown_cc_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='downtown-cc-support-table',
+                        data=data_downtown_cc_support,
+                        columns=columns_downtown_cc_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # South Bridge Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"South Bridge Support Types ({south_bridge_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='south-bridge-support-table',
+                        data=data_south_bridge_support,
+                        columns=columns_south_bridge_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Sunrise Navigation Homeless Center Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"Sunrise Navigation Homeless Center Support Types ({sunrise_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='sunrise-support-table',
+                        data=data_sunrise_support,
+                        columns=columns_sunrise_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Phone Call Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"Phone Call Support Types ({phone_call_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='phone-call-support-table',
+                        data=data_phone_call_support,
+                        columns=columns_phone_call_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Community First Village Support Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children=f"Community First Village Support Types ({community_first_len})"
+                    ),
+                    dash_table.DataTable(
+                        id='community-first-support-table',
+                        data=data_community_first_support,
+                        columns=columns_community_first_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Type of Support'},
+                            'width': '300px', 'minWidth': '300px', 'maxWidth': '400px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                        ]
+                    ),
+                ]
+            ),
+            
+            # Location Support Summary Table
+            html.Div(
+                className='data-box',
+                children=[
+                    html.H1(
+                        className='data-title',
+                        children='Location Support Summary'
+                    ),
+                    dash_table.DataTable(
+                        id='applications-table',
+                        data=data_location_support,
+                        columns=columns_location_support,
+                        page_size=10,
+                        sort_action='native',
+                        filter_action='native',
+                        row_selectable='multi',
+                        style_table={
+                            'overflowX': 'auto',
+                        },
+                        style_cell={
+                            'textAlign': 'left',
+                            'minWidth': '100px', 
+                            'whiteSpace': 'normal'
+                        },
+                        style_header={
+                            'textAlign': 'center', 
+                            'fontWeight': 'bold',
+                            'backgroundColor': '#34A853', 
+                            'color': 'white'
+                        },
+                        style_data={
+                            'whiteSpace': 'normal',
+                            'height': 'auto',
+                        },
+                        style_cell_conditional=[
+                            {'if': {'column_id': '#'},
+                            'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Location'},
+                            'width': '200px', 'minWidth': '200px', 'maxWidth': '250px', 'textAlign': 'left'},
+                            {'if': {'column_id': 'Count'},
+                            'width': '100px', 'minWidth': '100px', 'maxWidth': '100px', 'textAlign': 'center'},
+                            {'if': {'column_id': 'Support Provided'},
+                            'width': '400px', 'minWidth': '400px', 'maxWidth': '600px', 'textAlign': 'left'},
+                        ]
+                    ),
+                ]
+            ),
+        ]
+    ),
 ])
 
 print(f"Serving Flask app '{current_file}'! 🚀")
 
-# if __name__ == '__main__':
-#     app.run_server(debug=
-#                    True)
+if __name__ == '__main__':
+    app.run(debug=
+                   True)
                 #    False)
                 
 # ----------------------------------------------- Updated Database --------------------------------------
 
-updated_path = f'data/Navigation_{current_month}_{report_year}.xlsx'
-data_path = os.path.join(script_dir, updated_path)
-sheet_name=f'{current_month} {report_year}'
+# updated_path = f'data/Navigation_{current_month}_{report_year}.xlsx'
+# data_path = os.path.join(script_dir, updated_path)
+# sheet_name=f'{current_month} {report_year}'
 
-with pd.ExcelWriter(data_path, engine='xlsxwriter') as writer:
-    df.to_excel(
-            writer, 
-            sheet_name=sheet_name, 
-            startrow=1, 
-            index=False
-        )
+# with pd.ExcelWriter(data_path, engine='xlsxwriter') as writer:
+#     df.to_excel(
+#             writer, 
+#             sheet_name=sheet_name, 
+#             startrow=1, 
+#             index=False
+#         )
 
-    # Access the workbook and each worksheet
-    workbook = writer.book
-    sheet1 = writer.sheets[sheet_name]
+#     # Access the workbook and each worksheet
+#     workbook = writer.book
+#     sheet1 = writer.sheets[sheet_name]
     
-    # Define the header format
-    header_format = workbook.add_format({
-        'bold': True, 
-        'font_size': 16, 
-        'align': 'center', 
-        'valign': 'vcenter',
-        'border': 1, 
-        'font_color': 'black', 
-        'bg_color': '#B7B7B7',
-    })
+#     # Define the header format
+#     header_format = workbook.add_format({
+#         'bold': True, 
+#         'font_size': 16, 
+#         'align': 'center', 
+#         'valign': 'vcenter',
+#         'border': 1, 
+#         'font_color': 'black', 
+#         'bg_color': '#B7B7B7',
+#     })
     
-    # Set column A (Name) to be left-aligned, and B-E to be right-aligned
-    left_align_format = workbook.add_format({
-        'align': 'left',  # Left-align for column A
-        'valign': 'vcenter',  # Vertically center
-        'border': 0  # No border for individual cells
-    })
+#     # Set column A (Name) to be left-aligned, and B-E to be right-aligned
+#     left_align_format = workbook.add_format({
+#         'align': 'left',  # Left-align for column A
+#         'valign': 'vcenter',  # Vertically center
+#         'border': 0  # No border for individual cells
+#     })
 
-    right_align_format = workbook.add_format({
-        'align': 'right',  # Right-align for columns B-E
-        'valign': 'vcenter',  # Vertically center
-        'border': 0  # No border for individual cells
-    })
+#     right_align_format = workbook.add_format({
+#         'align': 'right',  # Right-align for columns B-E
+#         'valign': 'vcenter',  # Vertically center
+#         'border': 0  # No border for individual cells
+#     })
     
-    # Create border around the entire table
-    border_format = workbook.add_format({
-        'border': 1,  # Add border to all sides
-        'border_color': 'black',  # Set border color to black
-        'align': 'center',  # Center-align text
-        'valign': 'vcenter',  # Vertically center text
-        'font_size': 12,  # Set font size
-        'font_color': 'black',  # Set font color to black
-        'bg_color': '#FFFFFF'  # Set background color to white
-    })
+#     # Create border around the entire table
+#     border_format = workbook.add_format({
+#         'border': 1,  # Add border to all sides
+#         'border_color': 'black',  # Set border color to black
+#         'align': 'center',  # Center-align text
+#         'valign': 'vcenter',  # Vertically center text
+#         'font_size': 12,  # Set font size
+#         'font_color': 'black',  # Set font color to black
+#         'bg_color': '#FFFFFF'  # Set background color to white
+#     })
 
-    # Merge and format the first row (A1:E1) for each sheet
-    sheet1.merge_range('A1:AB1', f'Client Navigation Report {current_month} {report_year}', header_format)
+#     # Merge and format the first row (A1:E1) for each sheet
+#     sheet1.merge_range('A1:AB1', f'Client Navigation Report {current_month} {report_year}', header_format)
 
-    # Set column alignment and width
-    # sheet1.set_column('A:A', 20, left_align_format)  
+#     # Set column alignment and width
+#     # sheet1.set_column('A:A', 20, left_align_format)  
 
-    print(f"Navigation Excel file saved to {data_path}")
+#     print(f"Navigation Excel file saved to {data_path}")
 
 # -------------------------------------------- KILL PORT ---------------------------------------------------
 
