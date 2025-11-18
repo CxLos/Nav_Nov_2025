@@ -147,10 +147,12 @@ df.rename(
         "Location Encountered:" : "Location",
         "Individual's Insurance Status:" : "Insurance",
         "Individual's Status:" : "Status",
-        "Type of support given:" : "Support",
+        "Type of Support Given:" : "Support",
         "Gender:" : "Gender",
-        "Race/Ethnicity:" : "Ethnicity",
+        "Race / Ethnicity:" : "Ethnicity",
         "Provide brief support description:" : "Description",
+        "Housing Status" : "Housing",
+        "Income Level" : "Income",
         # "" : "",
     }, 
 inplace=True)
@@ -226,8 +228,6 @@ race_bar=px.bar(
     color='Ethnicity',
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=1000,
     title=dict(
         text='Race Distribution Bar Chart',
         x=0.5, 
@@ -282,7 +282,6 @@ race_pie=px.pie(
     names='Ethnicity',
     values='Count'
 ).update_layout(
-    # height=700, 
     title=dict(
         text='Race Distribution Ratio',
         x=0.5, 
@@ -340,8 +339,6 @@ gender_bar=px.bar(
     color='Gender',
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=1000,
     title=dict(
         text='Sex Distribution Bar Chart',
         x=0.5, 
@@ -394,7 +391,6 @@ gender_pie=px.pie(
     df,
     names='Gender'
 ).update_layout(
-    # height=700,
     title=dict(
         text='Ratio of Patient Visits by Sex',
         x=0.5, 
@@ -496,8 +492,6 @@ age_bar=px.bar(
     color='Age_Group',
     text='Patient_Visits',
 ).update_layout(
-    # height=700, 
-    # width=1000,
     title=dict(
         text='Client Age Distribution',
         x=0.5, 
@@ -619,8 +613,6 @@ insurance_bar=px.bar(
     color="Insurance",
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=1000,
     title=dict(
         text='Insurance Status Bar Chart',
         x=0.5, 
@@ -676,7 +668,6 @@ insurance_pie=px.pie(
     names="Insurance",
     values='Count'
 ).update_layout(
-    # height=700, 
     title=dict(
         text='Insurance Status Ratio',
         x=0.5, 
@@ -793,8 +784,6 @@ location_bar=px.bar(
     color="Location",
     text='Count',
 ).update_layout(
-    # height=900, 
-    # width=2000,
     title=dict(
         text='Location Encountered Bar Chart',
         x=0.5, 
@@ -850,8 +839,6 @@ location_pie=px.pie(
     names="Location",
     values='Count'
 ).update_layout(
-    # height=900,
-    # width=1800,
     title=dict(
         text='Ratio of Locations Encountered',
         x=0.5, 
@@ -919,8 +906,6 @@ support_bar=px.bar(
     color='Support',
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=1000,
     title=dict(
         text='Support Provided Distribution',
         x=0.5, 
@@ -1009,8 +994,6 @@ status_bar=px.bar(
     color='Status',
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=900,
     title=dict(
         text='New vs. Returning Clients',
         x=0.5, 
@@ -1087,6 +1070,167 @@ status_pie=px.pie(
     hovertemplate='<b>%{label} Status</b>: %{value}<extra></extra>',
 )
 
+# ----------------------- Housing Status ------------------------ #
+
+df['Housing'] = (
+    df['Housing']
+    .str.strip()
+    .replace({
+        "" : "N/A",
+    })
+)
+
+df_housing = df['Housing'].value_counts().reset_index(name='Count')
+# print("", df_housing)
+
+# Housing Bar Chart
+housing_bar=px.bar(
+    df_housing,
+    x='Housing',
+    y='Count',
+    color='Housing',
+    text='Count',
+).update_layout(
+    title=dict(
+        text='Housing Status Distribution',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+            )
+    ),
+    font=dict(
+        family='Calibri',
+        size=16,
+        color='black'
+    ),
+    xaxis=dict(
+        tickangle=0,  # Rotate x-axis labels for better readability
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
+        title=dict(
+            # text=None,
+            text="Housing",
+        ),
+    ),
+    yaxis=dict(
+        title=dict(
+            text=None
+        )
+    ),
+    bargap=0.08,
+    showlegend=False,
+)
+
+# Housing Pie Chart
+housing_pie=px.pie(
+    df_housing,
+    names='Housing',
+    values='Count',
+    # title='Race/Ethnicity'
+    title='Ratio of Housing Status',
+).update_layout(
+    title=dict(
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+            )
+    ),
+    font=dict(
+        family='Calibri',
+        size=16,
+        color='black'
+    )
+).update_traces(
+    rotation=-90,
+    # textinfo='value+percent',
+    texttemplate='%{value}<br>(%{percent:.1%})',
+    hovertemplate='<b>%{label} Housing</b>: %{value}<extra></extra>',
+)
+
+# ----------------------- Income Level ------------------------ #
+
+df['Income'] = (
+    df['Income']
+    .str.strip()
+    .replace({
+        "" : "N/A",
+    })
+)
+
+# "Income Level" dataframe:
+df_income = df['Income'].value_counts().reset_index(name='Count')
+# print("Income Value Counts:", df_income)
+
+# Income Bar Chart
+income_bar=px.bar(
+    df_income,
+    x='Income',
+    y='Count',
+    color='Income',
+    text='Count',
+).update_layout(
+    title=dict(
+        text='Income Level Distribution',
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+            )
+    ),
+    font=dict(
+        family='Calibri',
+        size=16,
+        color='black'
+    ),
+    xaxis=dict(
+        tickangle=0,  # Rotate x-axis labels for better readability
+        tickfont=dict(size=16),  # Adjust font size for the tick labels
+        title=dict(
+            # text=None,
+            text="Income Level",
+        ),
+    ),
+    yaxis=dict(
+        title=dict(
+            text=None
+        )
+    ),
+    bargap=0.08,
+    showlegend=False,
+)
+
+# Income Pie Chart
+income_pie=px.pie(
+    df_income,
+    names='Income',
+    values='Count',
+    # title='Race/Ethnicity'
+    title='Ratio of Income Level',
+).update_layout(
+    title=dict(
+        x=0.5, 
+        font=dict(
+            size=21,
+            family='Calibri',
+            color='black',
+            )
+    ),
+    font=dict(
+        family='Calibri',
+        size=16,
+        color='black'
+    )
+).update_traces(
+    rotation=-90,
+    # textinfo='value+percent',
+    texttemplate='%{value}<br>(%{percent:.1%})',
+    hovertemplate='<b>%{label} Income</b>: %{value}<extra></extra>',
+)
+
 # ----------------------- Person Filling Out This Form ------------------------ #
 
 # print("Person Unique Before: \n", df["Person"].unique().tolist())
@@ -1122,17 +1266,13 @@ df['Person'] = (
         })
     )
 
-normalized_categories = {cat.lower().strip(): cat for cat in person_unique}
 counter = Counter()
 
 for entry in df['Person']:
-    items = [i.strip().lower() for i in entry.split(",")]
+    items = [i.strip() for i in str(entry).split(",")]
     for item in items:
-        if item in normalized_categories:
-            counter[normalized_categories[item]] += 1
-
-# for category, count in counter.items():
-#     print(f"Support Counts: \n {category}: {count}")
+        if item:  # Only count non-empty items
+            counter[item] += 1
 
 df_person = pd.DataFrame(counter.items(), columns=['Person', 'Count']).sort_values(by='Count', ascending=False)
 
@@ -1148,8 +1288,6 @@ person_bar=px.bar(
     color='Person',
     text='Count',
 ).update_layout(
-    # height=700, 
-    # width=900,
     title=dict(
         text='People Submitting Forms',
         x=0.5, 
@@ -1206,7 +1344,7 @@ person_pie=px.pie(
     values='Count'  # Specify the values parameter
 ).update_layout(
     title=dict(
-        text='Ratio of Patient Visits by Sex',
+        text='Ratio of People Submitting Forms',
         x=0.5, 
         font=dict(
             size=21,
@@ -1299,8 +1437,6 @@ zip_fig =px.bar(
     xaxis_title='Residents',
     yaxis_title='Zip Code',
     title_x=0.5,
-    # height=950,
-    # width=1500,
     font=dict(
         family='Calibri',
         size=17,
@@ -1331,8 +1467,6 @@ zip_pie = px.pie(
     values='Count',
     color_discrete_sequence=px.colors.qualitative.Safe
 ).update_layout(
-    # height=700,
-    # width=900,
     title=dict(
         text='Ratio of ZIP Code Distribution',
         x=0.5, 
@@ -2132,6 +2266,54 @@ html.Div(
                     children=[
                         dcc.Graph(
                             className='graph',
+                            figure=housing_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=housing_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=income_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=income_pie
+                        )
+                    ]
+                ),
+            ]
+        ),
+        
+        html.Div(
+            className='graph-row',
+            children=[
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
                             figure=person_bar
                         )
                     ]
@@ -2149,7 +2331,7 @@ html.Div(
         ),
         
         html.Div(
-            className='graph-row',
+            className='zip-row',
             children=[
                 html.Div(
                     className='wide-box',
@@ -2163,20 +2345,21 @@ html.Div(
             ]
         ),
         
-        html.Div(
-            className='graph-row',
-            children=[
-                html.Div(
-                    className='wide-box',
-                    children=[
-                        dcc.Graph(
-                            className='zip-graph',
-                            figure=zip_pie
-                        )
-                    ]
-                ),
-            ]
-        ),
+        # html.Div(
+        #     className='graph-row',
+        #     children=[
+        #         html.Div(
+        #             className='wide-box',
+        #             children=[
+        #                 dcc.Graph(
+        #                     className='zip-graph',
+        #                     figure=zip_pie
+        #                 )
+        #             ]
+        #         ),
+        #     ]
+        # ),
+
         html.Div(
             className='folium-row',
             children=[
