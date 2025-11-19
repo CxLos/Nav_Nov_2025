@@ -417,12 +417,6 @@ gender_pie=px.pie(
 def random_date(start, end):
     return start + timedelta(days=np.random.randint(0, (end - start).days))
 
-start_date = datetime(1950, 1, 1) # Example: start date, e.g., 1950-01-01
-end_date = datetime(2000, 12, 31)
-
-def random_date(start, end):
-    return start + timedelta(days=np.random.randint(0, (end - start).days))
-
 # # Define the date range for random dates
 start_date = datetime(1950, 1, 1)
 end_date = datetime(2000, 12, 31)
