@@ -147,7 +147,7 @@ df.rename(
         "Location Encountered:" : "Location",
         "Individual's Insurance Status:" : "Insurance",
         "Individual's Status:" : "Status",
-        "Type of Coordination/Navigation Provided:" : "Support",
+        "Type of Coordination/Navigation Provided:10" : "Support",
         "Gender:" : "Gender",
         "Race / Ethnicity:" : "Ethnicity",
         "Provide brief support description:" : "Description",
