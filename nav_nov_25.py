@@ -1,6 +1,8 @@
 # =================================== IMPORTS ================================= #
 
 import os
+import re
+pattern = r',(?=(?:[^()]*\([^()]*\))*[^()]*$)'
 
 # import json
 import numpy as np 
@@ -880,18 +882,27 @@ counter = Counter()
 # Around line 897, modify the splitting logic:
 
 for entry in df['Support']:
-    # Split by both comma and 'and', then clean each item
-    # First replace ' and ' with ', ' to standardize, then split by comma
     standardized_entry = str(entry).replace(' and ', ', ')
-    items = [i.strip() for i in standardized_entry.split(",") if i.strip()]
+    items = [i.strip() for i in re.split(pattern, standardized_entry) if i.strip()]
     for item in items:
-        if item:  # Only count non-empty items
-            counter[item] += 1
+        # Strip parenthetical descriptions - keep only text before the opening parenthesis
+        clean_item = re.sub(r'\s*\(.*?\)\s*', '', item).strip()
+        if clean_item:  # Only count if there's content after stripping
+            counter[clean_item] += 1
 
 # Create DataFrame from counter
 df_support = pd.DataFrame(counter.items(), columns=['Support', 'Count']).sort_values(by='Count', ascending=False)
 
 # print("Support Value counts After Split: \n", df_support)
+
+df['Support'] = (
+    df['Support']
+        .astype(str)
+            .str.strip()
+            .replace({
+                "" : "",
+            })
+    )
 
 support_bar=px.bar(
     df_support,
@@ -2150,64 +2161,47 @@ html.Div(
             ]
         ),
         
+        # Breadcrumb navigation
+        html.Div(
+            className='location-breadcrumb',
+            id='location-breadcrumb',
+            style={
+
+            },
+            children=[
+                html.Button(
+                    '🏠 All Locations',
+                    className='bread-button',
+                    id='location-home-btn',
+                    n_clicks=0,
+                    style={
+                        'fontFamily': 'Segoe UI, Tahoma, sans-serif',
+                        'fontSize': '16px'
+                    }
+                )
+            ]
+        ),
+        
         html.Div(
             className='graph-row',
             children=[
                 html.Div(
-                    style={'width': '100%'},
+                    className='graph-box',
                     children=[
-                        # Breadcrumb navigation
-                        html.Div(
-                            id='location-breadcrumb',
-                            style={
-                                'padding': '10px 20px',
-                                'fontSize': '18px',
-                                'backgroundColor': '#f8f9fa',
-                                'borderRadius': '5px',
-                                'marginBottom': '10px'
-                            },
-                            children=[
-                                html.Button(
-                                    '🏠 All Locations',
-                                    id='location-home-btn',
-                                    n_clicks=0,
-                                    style={
-                                        'border': 'none',
-                                        'background': 'none',
-                                        'color': '#007bff',
-                                        'cursor': 'pointer',
-                                        'fontSize': '16px',
-                                        'fontWeight': 'bold',
-                                        'width': '20px'
-                                    }
-                                )
-                            ]
-                        ),
-                        # Graph container
-                        html.Div(
-                            className='graph-row',
-                            children=[
-                                html.Div(
-                                    className='graph-box',
-                                    children=[
-                                        dcc.Graph(
-                                            id='location-drill-chart',
-                                            className='graph',
-                                            figure=location_bar
-                                        )
-                                    ]
-                                ),
-                                html.Div(
-                                    className='graph-box',
-                                    children=[
-                                        dcc.Graph(
-                                            className='graph',
-                                            figure=location_pie
-                                        )
-                                    ]
-                                ),
-                            ]
-                        ),
+                        dcc.Graph(
+                            id='location-drill-chart',
+                            className='graph',
+                            figure=location_bar
+                        )
+                    ]
+                ),
+                html.Div(
+                    className='graph-box',
+                    children=[
+                        dcc.Graph(
+                            className='graph',
+                            figure=location_pie
+                        )
                     ]
                 ),
             ]
@@ -2864,19 +2858,21 @@ def location_drill_navigation(clickData, home_clicks, state):
         selected_loc = state['selected_location']
         df_filtered = df[df['Location'] == selected_loc]
         
-        # Count support types using same split logic
         counter = Counter()
         for entry in df_filtered['Support']:
             standardized_entry = str(entry).replace(' and ', ', ')
-            items = [i.strip() for i in standardized_entry.split(",") if i.strip()]
+            items = [i.strip() for i in re.split(pattern, standardized_entry) if i.strip()]
             for item in items:
-                if item:
-                    counter[item] += 1
-        
+                # Strip parenthetical descriptions - keep only text before the opening parenthesis
+                clean_item = re.sub(r'\s*\(.*?\)\s*', '', item).strip()
+                if clean_item:  # Only count if there's content after stripping
+                    counter[clean_item] += 1
+
         df_support_filtered = pd.DataFrame(
-            counter.items(), 
+            counter.items(),
             columns=['Support', 'Count']
         ).sort_values(by='Count', ascending=False)
+
         
         fig = px.bar(
             df_support_filtered,
