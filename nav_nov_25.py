@@ -19,7 +19,7 @@ import folium
 from folium.plugins import MousePosition
 
 import dash
-from dash import dcc, html, dash_table
+from dash import dcc, html, dash_table, Input, Output, State, callback_context
 
 # Google Web Credentials
 import json
@@ -147,7 +147,7 @@ df.rename(
         "Location Encountered:" : "Location",
         "Individual's Insurance Status:" : "Insurance",
         "Individual's Status:" : "Status",
-        "Type of Coordination/Navigation Provided:10" : "Support",
+        "Type of Coordination/Navigation Provided:" : "Support",
         "Gender:" : "Gender",
         "Race / Ethnicity:" : "Ethnicity",
         "Provide brief support description:" : "Description",
@@ -2154,55 +2154,67 @@ html.Div(
             className='graph-row',
             children=[
                 html.Div(
-                    className='graph-box',
+                    style={'width': '100%'},
                     children=[
-                        dcc.Graph(
-                            className='graph',
-                            figure=location_bar
-                        )
-                    ]
-                ),
-                html.Div(
-                    className='graph-box',
-                    children=[
-                        dcc.Graph(
-                            className='graph',
-                            figure=location_pie
-                        )
+                        # Breadcrumb navigation
+                        html.Div(
+                            id='location-breadcrumb',
+                            style={
+                                'padding': '10px 20px',
+                                'fontSize': '18px',
+                                'backgroundColor': '#f8f9fa',
+                                'borderRadius': '5px',
+                                'marginBottom': '10px'
+                            },
+                            children=[
+                                html.Button(
+                                    '🏠 All Locations',
+                                    id='location-home-btn',
+                                    n_clicks=0,
+                                    style={
+                                        'border': 'none',
+                                        'background': 'none',
+                                        'color': '#007bff',
+                                        'cursor': 'pointer',
+                                        'fontSize': '16px',
+                                        'fontWeight': 'bold',
+                                        'width': '20px'
+                                    }
+                                )
+                            ]
+                        ),
+                        # Graph container
+                        html.Div(
+                            className='graph-row',
+                            children=[
+                                html.Div(
+                                    className='graph-box',
+                                    children=[
+                                        dcc.Graph(
+                                            id='location-drill-chart',
+                                            className='graph',
+                                            figure=location_bar
+                                        )
+                                    ]
+                                ),
+                                html.Div(
+                                    className='graph-box',
+                                    children=[
+                                        dcc.Graph(
+                                            className='graph',
+                                            figure=location_pie
+                                        )
+                                    ]
+                                ),
+                            ]
+                        ),
                     ]
                 ),
             ]
         ),
         
-        # html.Div(
-        #     className='graph-row',
-        #     children=[
-        #         html.Div(
-        #             className='wide-box',
-        #             children=[
-        #                 dcc.Graph(
-        #                     className='wide-graph',
-        #                     figure=location_bar
-        #                 )
-        #             ]
-        #         ),
-        #     ]
-        # ),
-        
-        # html.Div(
-        #     className='graph-row',
-        #     children=[
-        #         html.Div(
-        #             className='wide-box',
-        #             children=[
-        #                 dcc.Graph(
-        #                     className='wide-graph',
-        #                     figure=location_pie
-        #                 )
-        #             ]
-        #         ),
-        #     ]
-        # ),
+        # Store for drill-down state
+        dcc.Store(id='location-drill-state', data={'level': 0, 'selected_location': None}),
         
         html.Div(
             className='graph-row',
@@ -2757,6 +2769,174 @@ html.Div(
         ]
     ),
 ])
+
+# ======================== Location Drill-Down Callback ======================== #
+
+@app.callback(
+    [Output('location-drill-chart', 'figure'),
+     Output('location-drill-state', 'data'),
+     Output('location-breadcrumb', 'children')],
+    [Input('location-drill-chart', 'clickData'),
+     Input('location-home-btn', 'n_clicks')],
+    [State('location-drill-state', 'data')]
+)
+def location_drill_navigation(clickData, home_clicks, state):
+    """
+    Handle drill-down navigation for location charts
+    - Level 0: Show all locations
+    - Level 1: Show support types for selected location
+    """
+    ctx = callback_context.triggered[0]['prop_id'] if callback_context.triggered else None
+    
+    # Handle back to home button
+    if ctx == 'location-home-btn.n_clicks' and home_clicks > 0:
+        state['level'] = 0
+        state['selected_location'] = None
+    
+    # Handle drill-down click
+    elif clickData and ctx == 'location-drill-chart.clickData':
+        if state['level'] == 0:
+            # Drill down to support types for clicked location
+            clicked_location = clickData['points'][0]['x']
+            state['selected_location'] = clicked_location
+            state['level'] = 1
+    
+    # Generate chart based on current level
+    if state['level'] == 0:
+        # Level 0: Show all locations (original chart)
+        fig = px.bar(
+            df_location,
+            x="Location",
+            y='Count',
+            color="Location",
+            text='Count',
+        ).update_layout(
+            title=dict(
+                text='Location Encountered Bar Chart (Click to drill down)',
+                x=0.5, 
+                font=dict(size=21, family='Calibri', color='black')
+            ),
+            font=dict(family='Calibri', size=16, color='black'),
+            xaxis=dict(
+                tickangle=-20,
+                tickfont=dict(size=16),
+                title=dict(text="Location", font=dict(size=16)),
+                showticklabels=False
+            ),
+            yaxis=dict(
+                title=dict(text='Count', font=dict(size=16)),
+            ),
+            legend=dict(
+                title='',
+                orientation="v",
+                x=1.05,
+                y=1,
+                xanchor="left",
+                yanchor="top",
+            ),
+            hovermode='closest',
+            bargap=0.08,
+            bargroupgap=0,
+        ).update_traces(
+            textposition=None,
+            hovertemplate='<b>Location:</b> %{x}<br><b>Count</b>: %{y}<extra></extra>'
+        )
+        
+        # Breadcrumb for home
+        breadcrumb = [
+            html.Button(
+                '🏠 All Locations',
+                id='location-home-btn',
+                n_clicks=0,
+                style={
+                    'border': 'none',
+                    'background': 'none',
+                    'color': '#007bff',
+                    'cursor': 'pointer',
+                    'fontSize': '16px',
+                    'fontWeight': 'bold'
+                }
+            )
+        ]
+        
+    else:
+        # Level 1: Show support types for selected location
+        selected_loc = state['selected_location']
+        df_filtered = df[df['Location'] == selected_loc]
+        
+        # Count support types using same split logic
+        counter = Counter()
+        for entry in df_filtered['Support']:
+            standardized_entry = str(entry).replace(' and ', ', ')
+            items = [i.strip() for i in standardized_entry.split(",") if i.strip()]
+            for item in items:
+                if item:
+                    counter[item] += 1
+        
+        df_support_filtered = pd.DataFrame(
+            counter.items(), 
+            columns=['Support', 'Count']
+        ).sort_values(by='Count', ascending=False)
+        
+        fig = px.bar(
+            df_support_filtered,
+            x='Support',
+            y='Count',
+            color='Support',
+            text='Count',
+        ).update_layout(
+            title=dict(
+                text=f'Support Types at {selected_loc}',
+                x=0.5,
+                font=dict(size=21, family='Calibri', color='black')
+            ),
+            font=dict(family='Calibri', size=16, color='black'),
+            xaxis=dict(
+                tickangle=-20,
+                tickfont=dict(size=16),
+                title=dict(text="Support Type", font=dict(size=16)),
+                showticklabels=False
+            ),
+            yaxis=dict(
+                title=dict(text='Count', font=dict(size=16)),
+            ),
+            legend=dict(
+                title='',
+                orientation="v",
+                x=1.05,
+                y=1,
+                xanchor="left",
+                yanchor="top",
+            ),
+            hovermode='closest',
+            bargap=0.08,
+        ).update_traces(
+            textposition='outside',
+            hovertemplate='<b>Support:</b> %{x}<br><b>Count</b>: %{y}<extra></extra>'
+        )
+        
+        # Breadcrumb showing path
+        breadcrumb = [
+            html.Button(
+                '🏠 All Locations',
+                id='location-home-btn',
+                n_clicks=0,
+                style={
+                    'border': 'none',
+                    'background': 'none',
+                    'color': '#007bff',
+                    'cursor': 'pointer',
+                    'fontSize': '16px',
+                    'fontWeight': 'bold'
+                }
+            ),
+            html.Span(' > ', style={'margin': '0 10px', 'color': '#6c757d'}),
+            html.Span(selected_loc, style={'fontWeight': 'bold', 'color': '#495057'})
+        ]
+    
+    return fig, state, breadcrumb
+
+# ============================================================================== #
 
 print(f"Serving Flask app '{current_file}'! 🚀")
 
