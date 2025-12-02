@@ -1113,9 +1113,10 @@ housing_bar=px.bar(
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
         tickfont=dict(size=16),  # Adjust font size for the tick labels
+        showticklabels=False,  # Hide x-tick labels
         title=dict(
-            # text=None,
-            text="Housing",
+            text=None,
+            # text="Housing",
         ),
     ),
     yaxis=dict(
@@ -1123,8 +1124,11 @@ housing_bar=px.bar(
             text=None
         )
     ),
+    legend=dict(
+        title=''
+    ),
     bargap=0.08,
-    showlegend=False,
+    showlegend=True,
 )
 
 # Housing Pie Chart
@@ -1157,10 +1161,14 @@ housing_pie=px.pie(
 
 # ----------------------- Income Level ------------------------ #
 
+# print("Income Unique Before:", df['Income'].unique())
+
 df['Income'] = (
     df['Income']
     .str.strip()
     .replace({
+        0 : "N/A",
+        "$0" : "N/A",
         "" : "N/A",
     })
 )
@@ -1194,9 +1202,10 @@ income_bar=px.bar(
     xaxis=dict(
         tickangle=0,  # Rotate x-axis labels for better readability
         tickfont=dict(size=16),  # Adjust font size for the tick labels
+        showticklabels=False,  # Hide x-tick labels
         title=dict(
-            # text=None,
-            text="Income Level",
+            text=None,
+            # text="Income Level",
         ),
     ),
     yaxis=dict(
@@ -1204,8 +1213,11 @@ income_bar=px.bar(
             text=None
         )
     ),
+    legend=dict(
+        title=''
+    ),
     bargap=0.08,
-    showlegend=False,
+    showlegend=True,
 )
 
 # Income Pie Chart
@@ -1371,63 +1383,30 @@ person_pie=px.pie(
 
 # ---------------------- Zip 2 --------------------- #
 
-# df['ZIP2'] = df['ZIP Code:']
-# print('ZIP2 Unique Before: \n', df['ZIP2'].unique().tolist())
-
-# zip2_unique =[
-# 78753, '', 78721, 78664, 78725, 78758, 78724, 78660, 78723, 78748, 78744, 78752, 78745, 78617, 78754, 78653, 78727, 78747, 78659, 78759, 78741, 78616, 78644, 78757, 'UnKnown', 'Unknown', 'uknown', 'Unknown ', 78729
-# ]
-
-# zip2_mode = df['ZIP2'].mode()[0]
-
-# df['ZIP2'] = (
-#     df['ZIP2']
-#     .astype(str)
-#     .str.strip()
-#     .replace({
-#         'Texas': zip2_mode,
-#         'Unhoused': zip2_mode,
-#         'UNHOUSED': zip2_mode,
-#         'UnKnown': zip2_mode,
-#         'Unknown': zip2_mode,
-#         'uknown': zip2_mode,
-#         'Unknown': zip2_mode,
-#         'NA': zip2_mode,
-#         'nan': zip2_mode,
-#         '': zip2_mode,
-#         ' ': zip2_mode,
-#     })
-# )
-
-# df['ZIP2'] = df['ZIP2'].fillna(zip2_mode)
-# df_z = df['ZIP2'].value_counts().reset_index(name='Count')
-
-# print('ZIP2 Unique After: \n', df_z['ZIP2'].unique().tolist())
-# print('ZIP2 Value Counts After: \n', df_z['ZIP2'].value_counts())
-
+# Clean and filter ZIP codes
 df['ZIP2'] = df['ZIP Code:'].astype(str).str.strip()
 
-valid_zip_mask = df['ZIP2'].str.isnumeric()
-zip2_mode = df.loc[valid_zip_mask, 'ZIP2'].mode()[0]  # still a string
-
+# Define invalid/null values to exclude
 invalid_zip_values = [
     'Texas', 'Unhoused', 'UNHOUSED', 'UnKnown', 'Unknown', 'uknown',
     'Unknown ', 'NA', 'nan', 'NaN', 'None', '', ' '
 ]
-df['ZIP2'] = df['ZIP2'].replace(invalid_zip_values, zip2_mode)
 
-# Step 3: Coerce to numeric, fill any remaining NaNs, then convert back to string
-df['ZIP2'] = pd.to_numeric(df['ZIP2'], errors='coerce')
-df['ZIP2'] = df['ZIP2'].fillna(int(zip2_mode)).astype(int).astype(str)
+# Filter out invalid ZIP codes - only keep numeric values
+valid_zip_mask = (
+    df['ZIP2'].str.isnumeric() & 
+    ~df['ZIP2'].isin(invalid_zip_values)
+)
 
-# Step 4: Create value count dataframe for the bar chart
-df_z = df['ZIP2'].value_counts().reset_index(name='Count')
-df_z.columns = ['ZIP2', 'Count']  # Rename columns for Plotly
+# Create filtered dataframe with only valid ZIP codes
+df_zip_filtered = df[valid_zip_mask].copy()
+
+# Create value count dataframe for the bar chart (only valid zips)
+df_z = df_zip_filtered['ZIP2'].value_counts().reset_index(name='Count')
+df_z.columns = ['ZIP2', 'Count']
 
 df_z['Percentage'] = (df_z['Count'] / df_z['Count'].sum()) * 100
 df_z['text_label'] = df_z['Count'].astype(str) + ' (' + df_z['Percentage'].round(1).astype(str) + '%)'
-# df_z['text_label'] = df_z['Percentage'].round(1).astype(str) + '%'
-
 
 zip_fig =px.bar(
     df_z,
@@ -1435,8 +1414,7 @@ zip_fig =px.bar(
     y='ZIP2',
     color='ZIP2',
     text='text_label',
-    # text='Count',
-    orientation='h'  # Horizontal bar chart
+    orientation='h'
 ).update_layout(
     title='Number of Clients by Zip Code',
     xaxis_title='Residents',
@@ -1447,22 +1425,21 @@ zip_fig =px.bar(
         size=17,
         color='black'
     ),
-        yaxis=dict(
-        tickangle=0  # Keep y-axis labels horizontal for readability
+    yaxis=dict(
+        tickangle=0
     ),
-        legend=dict(
+    legend=dict(
         title='ZIP Code',
-        orientation="v",  # Vertical legend
-        x=1.05,  # Position legend to the right
-        xanchor="left",  # Anchor legend to the left
-        y=1,  # Position legend at the top
-        yanchor="top"  # Anchor legend at the top
+        orientation="v",
+        x=1.05,
+        xanchor="left",
+        y=1,
+        yanchor="top"
     ),
 ).update_traces(
-    textposition='auto',  # Place text labels inside the bars
-    textfont=dict(size=30),  # Increase text size in each bar
-    # insidetextanchor='middle',  # Center text within the bars
-    textangle=0,            # Ensure text labels are horizontal
+    textposition='auto',
+    textfont=dict(size=30),
+    textangle=0,
     hovertemplate='<b>ZIP Code</b>: %{y}<br><b>Count</b>: %{x}<extra></extra>'
 )
 
