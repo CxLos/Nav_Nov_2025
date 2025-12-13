@@ -70,7 +70,7 @@ df = data.copy()
 df.columns = df.columns.str.strip()
 
 # Get the reporting month:
-current_month = datetime(2025, 11, 1).strftime("%B")
+report_month = datetime(2025, 11, 1).strftime("%B")
 report_year = datetime(2025, 11, 1).year
 int_month = 11
 
@@ -87,8 +87,6 @@ df.columns = df.columns.str.strip()
 # Strip whitespace from string entries in the whole DataFrame
 for col in df.select_dtypes(include='object').columns:
     df[col] = df[col].map(lambda x: x.strip() if isinstance(x, str) else x)
-
-# df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
 # Define a discrete color sequence
 # color_sequence = px.colors.qualitative.Plotly
@@ -116,7 +114,7 @@ columns = [
     'Activity Duration (minutes):', 
     'Location Encountered:',
     "Individual's First Name:", 
-    "Individual's Last Name:"
+    "Individual's Last Name:",
     "Individual's Date of Birth:", 
     "Individual's Insurance Status:", 
     "Individual's street address:", 
@@ -141,6 +139,9 @@ columns = [
 df['HMIS SPID Number:'] = df['HMIS SPID Number:'].fillna(-1)
 df['MAP Card Number'] = df['MAP Card Number'].fillna(-1)
 
+# Create Full Name column
+df['Client Full Name'] = df["Individual's First Name:"].astype(str) + " " + df["Individual's Last Name:"].astype(str)
+
 df.rename(
     columns={
         "Activity Duration (minutes):" : "Activity Duration",
@@ -158,6 +159,42 @@ df.rename(
         # "" : "",
     }, 
 inplace=True)
+
+# Search for all duplicates in dataset:
+duplicates = df[df.duplicated(keep=False)]
+# print("Duplicate entries in dataset:\n", duplicates)
+
+# Find duplicate rows where both first and last names match:
+duplicate_rows = df[df.duplicated(subset=["Individual's First Name:", "Individual's Last Name:"], keep=False)][["Individual's First Name:", "Individual's Last Name:", 'Date of Activity']].sort_values(["Individual's Last Name:", "Individual's First Name:"])
+# print("Duplicate name entries:\n", duplicate_rows)
+
+# Show duplicate names with their counts
+duplicate_counts = df[df.duplicated(subset=["Individual's First Name:", "Individual's Last Name:"], keep=False)].groupby(["Individual's First Name:", "Individual's Last Name:"]).size().reset_index(name='Count').sort_values('Count', ascending=False)
+# print("Duplicate name counts:\n", duplicate_counts)
+
+# ========================== SPREADSHEET COMPARISON ========================== #
+
+# Load second spreadsheet for comparison
+sheet_url_2 = "https://docs.google.com/spreadsheets/d/1GWnQrLptjkgg8CR1G8OpYaCHZMmW5xOzg0kFtPCkxKw/edit?gid=34671814#gid=34671814"
+sheet_2 = client.open_by_url(sheet_url_2)
+worksheet_2 = sheet_2.worksheet(f"{report_month}")
+data_2 = pd.DataFrame(worksheet_2.get_all_records())
+df_2 = data_2.copy()
+df_2.columns = df_2.columns.str.strip()
+
+# Create 'Person' column from 'submitted_by' email addresses
+df_2['submitted_by'] = df_2['submitted_by'].str.replace(r'@.*', '', regex=True).str.replace('.', ' ').str.title()
+
+# Convert created_at to datetime for proper sorting and keep only date
+df_2['created_at'] = pd.to_datetime(df_2['created_at'], errors='coerce').dt.date
+
+# Find records in df_2 that are NOT in df
+missing_in_main = df_2[~df_2['seeker_name'].isin(df['Client Full Name'])][["seeker_name", 'created_at', "submitted_by"]].sort_values(['created_at', 'seeker_name'], ascending=[True, True])
+# print(f"\nRecords in Findhelp NOT in Navigation ({len(missing_in_main)}):\n", missing_in_main)
+
+# Find records in df that are NOT in df_2
+missing_in_comparison = df[~df['Client Full Name'].isin(df_2['seeker_name'])][['Client Full Name', 'Date of Activity', 'Person']].sort_values(['Date of Activity', 'Client Full Name'])
+# print(f"\nRecords in Navigation NOT in Findhelp ({len(missing_in_comparison)}):\n", missing_in_comparison)
 
 # ------------------------------- Clients Serviced ---------------------------- #
 
@@ -207,13 +244,19 @@ travel_time = round(df['Travel'].sum() / 60)
 
 # ------------------------------- Race Graphs ---------------------------- #
 
+# print("Race/Ethnicity Unique Values: \n", df['Ethnicity'].unique().tolist())
+
 df['Ethnicity'] = (
     df['Ethnicity']
         .astype(str)
         .str.strip()
         .replace({
-            "Hispanic/Latino": "Hispanic/ Latino", 
-            "White": "White/ European Ancestry", 
+            "Hispanic/Latino": "Hispanic / Latino", 
+            "Hispanic/ Latino": "Hispanic / Latino", 
+            "Black/African American": "Black / African American", 
+            "Black/ African American": "Black / African American", 
+            "White": "White / Caucasian", 
+            "White/ European Ancestry": "White / Caucasian", 
             "Group search": "N/A", 
             "Group search": "N/A", 
         })
@@ -587,6 +630,7 @@ df["Insurance"] = (
     .str.strip()
     .replace({
         '': 'Unknown',
+        'unknown': 'Unknown',
         'Just got it!!!': 'Private Insurance',
         '30 DAY 100': '30 Day 100',
         'Medicare': 'Medicaid',
@@ -1082,6 +1126,7 @@ df['Housing'] = (
     .str.strip()
     .replace({
         "" : "N/A",
+        "House/ Apartment" : "House / Apartment",
     })
 )
 
@@ -1886,14 +1931,14 @@ app.layout = html.Div(
                     'Client Navigation Report', 
                     className='title'),
                 html.H1(
-                    f'{current_month} {report_year}', 
+                    f'{report_month} {report_year}', 
                     className='title2'),
                 html.Div(
                     className='btn-box', 
                     children=[
                         html.A(
                             'Repo',
-                            href=f'https://github.com/CxLos/Nav_{current_month}_{report_year}',
+                            href=f'https://github.com/CxLos/Nav_{report_month}_{report_year}',
                             className='btn'
                         ),
                     ]
@@ -1916,7 +1961,7 @@ html.Div(
                     children=[
                         html.H3(
                             className='rollup-title',
-                            children=[f'{current_month} Clients Served']
+                            children=[f'{report_month} Clients Served']
                         ),
                     ]
                 ),
@@ -1945,7 +1990,7 @@ html.Div(
                     children=[
                         html.H3(
                             className='rollup-title',
-                            children=[f'{current_month} Navigation Hours']
+                            children=[f'{report_month} Navigation Hours']
                         ),
                     ]
                 ),
@@ -1979,7 +2024,7 @@ html.Div(
                     children=[
                         html.H3(
                             className='rollup-title',
-                            children=[f'{current_month} Travel Hours']
+                            children=[f'{report_month} Travel Hours']
                         ),
                     ]
                 ),
@@ -2920,9 +2965,9 @@ if __name__ == '__main__':
                 
 # ----------------------------------------------- Updated Database --------------------------------------
 
-# updated_path = f'data/Navigation_{current_month}_{report_year}.xlsx'
+# updated_path = f'data/Navigation_{report_month}_{report_year}.xlsx'
 # data_path = os.path.join(script_dir, updated_path)
-# sheet_name=f'{current_month} {report_year}'
+# sheet_name=f'{report_month} {report_year}'
 
 # with pd.ExcelWriter(data_path, engine='xlsxwriter') as writer:
 #     df.to_excel(
@@ -2972,7 +3017,7 @@ if __name__ == '__main__':
 #     })
 
 #     # Merge and format the first row (A1:E1) for each sheet
-#     sheet1.merge_range('A1:AB1', f'Client Navigation Report {current_month} {report_year}', header_format)
+#     sheet1.merge_range('A1:AB1', f'Client Navigation Report {report_month} {report_year}', header_format)
 
 #     # Set column alignment and width
 #     # sheet1.set_column('A:A', 20, left_align_format)  
